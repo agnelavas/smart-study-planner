@@ -72,7 +72,7 @@ streamlit run app.py
 - **Member A — AGNELA PEARL VAS - Core Logic / Backend:** Urgency-Difficulty Priority Score algorithm, exam-eve tapering logic, panic rebalancer, `.ics` calendar generator.
 - **Member B — AISHANI SEJAL - Supporting Logic / Integration:** Input validation rules, preset exam schedules, offline fallback vaults, integration tests.
 - **Member C — AKSHITHA N - Interface / Visualization:** Streamlit layout, custom four-palette CSS architecture, Plotly stacked timeline, interactive checklist matrix.
-- **Member D — AMRITA JYOTI - Documentation / QA / Presentation:** Technical documentation, presentation deck, system stress testing, backup demo capture.
+- **Member D — AMRITA JYOTI - Documentation / QA / Presentation:** Technical documentation, presentation deck, system stress testing.
 
 ## 🧪 Quality Assurance
 

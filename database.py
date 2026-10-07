@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import json
+import hashlib
 import pandas as pd
 
 
@@ -17,16 +18,30 @@ def get_connection():
 
 
 # =========================================================
-# STUDENT PROFILE
+# PASSWORD SECURITY
+# =========================================================
+
+def hash_password(password):
+    return hashlib.sha256(
+        password.encode("utf-8")
+    ).hexdigest()
+
+
+# =========================================================
+# CREATE TABLES
 # =========================================================
 
 def create_tables():
+
     conn = get_connection()
     cursor = conn.cursor()
 
+    # USERS
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS student_profile (
-            id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
             name TEXT,
             email TEXT,
             phone TEXT,
@@ -35,39 +50,121 @@ def create_tables():
         )
     """)
 
+    # SUBJECTS
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_subjects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT,
+            chapters INTEGER,
+            difficulty INTEGER,
+            exam_date TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
+    # SAVED TIMETABLE
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE NOT NULL,
+            schedule_data TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
 
-def save_profile(name, email, phone, college, semester):
+# =========================================================
+# USER ACCOUNT
+# =========================================================
+
+def create_user(username, password, name, email, phone, college, semester):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+
+        cursor.execute("""
+            INSERT INTO users
+            (username, password, name, email, phone, college, semester)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            username.strip().lower(),
+            hash_password(password),
+            name.strip(),
+            email.strip(),
+            phone.strip(),
+            college.strip(),
+            semester.strip()
+        ))
+
+        conn.commit()
+
+        user_id = cursor.lastrowid
+
+        conn.close()
+
+        return user_id
+
+    except sqlite3.IntegrityError:
+
+        conn.close()
+
+        return None
+
+
+def login_user(username, password):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT OR REPLACE INTO student_profile
-        (id, name, email, phone, college, semester)
-        VALUES (1, ?, ?, ?, ?, ?)
+        SELECT
+            id,
+            username,
+            name,
+            email,
+            phone,
+            college,
+            semester
+        FROM users
+        WHERE username = ?
+        AND password = ?
     """, (
-        name,
-        email,
-        phone,
-        college,
-        semester
+        username.strip().lower(),
+        hash_password(password)
     ))
 
-    conn.commit()
+    user = cursor.fetchone()
+
     conn.close()
 
+    return user
 
-def load_profile():
+
+# =========================================================
+# PROFILE
+# =========================================================
+
+def load_profile(user_id):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT name, email, phone, college, semester
-        FROM student_profile
-        WHERE id = 1
-    """)
+        SELECT
+            name,
+            email,
+            phone,
+            college,
+            semester
+        FROM users
+        WHERE id = ?
+    """, (user_id,))
 
     profile = cursor.fetchone()
 
@@ -76,37 +173,61 @@ def load_profile():
     return profile
 
 
-# =========================================================
-# SUBJECTS
-# =========================================================
+def save_profile(
+    user_id,
+    name,
+    email,
+    phone,
+    college,
+    semester
+):
 
-def create_subject_table():
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS subjects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            chapters INTEGER,
-            difficulty INTEGER,
-            exam_date TEXT
-        )
-    """)
+        UPDATE users
+        SET
+            name = ?,
+            email = ?,
+            phone = ?,
+            college = ?,
+            semester = ?
+        WHERE id = ?
+    """, (
+        name,
+        email,
+        phone,
+        college,
+        semester,
+        user_id
+    ))
 
     conn.commit()
     conn.close()
 
 
-def save_subject(name, chapters, difficulty, exam_date):
+# =========================================================
+# SUBJECTS
+# =========================================================
+
+def save_subject(
+    user_id,
+    name,
+    chapters,
+    difficulty,
+    exam_date
+):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO subjects
-        (name, chapters, difficulty, exam_date)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO user_subjects
+        (user_id, name, chapters, difficulty, exam_date)
+        VALUES (?, ?, ?, ?, ?)
     """, (
+        user_id,
         name,
         chapters,
         difficulty,
@@ -117,15 +238,22 @@ def save_subject(name, chapters, difficulty, exam_date):
     conn.close()
 
 
-def load_subjects():
+def load_subjects(user_id):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT id, name, chapters, difficulty, exam_date
-        FROM subjects
+        SELECT
+            id,
+            name,
+            chapters,
+            difficulty,
+            exam_date
+        FROM user_subjects
+        WHERE user_id = ?
         ORDER BY id
-    """)
+    """, (user_id,))
 
     rows = cursor.fetchall()
 
@@ -134,6 +262,7 @@ def load_subjects():
     subjects = []
 
     for row in rows:
+
         subjects.append({
             "id": row[0],
             "name": row[1],
@@ -145,14 +274,19 @@ def load_subjects():
     return subjects
 
 
-def delete_subject(subject_id):
+def delete_subject(user_id, subject_id):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        DELETE FROM subjects
+        DELETE FROM user_subjects
         WHERE id = ?
-    """, (subject_id,))
+        AND user_id = ?
+    """, (
+        subject_id,
+        user_id
+    ))
 
     conn.commit()
     conn.close()
@@ -162,26 +296,10 @@ def delete_subject(subject_id):
 # SAVED TIMETABLE
 # =========================================================
 
-def create_schedule_table():
+def save_schedule(user_id, schedule_df):
+
     conn = get_connection()
     cursor = conn.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS saved_schedule (
-            id INTEGER PRIMARY KEY,
-            schedule_data TEXT
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-def save_schedule(schedule_df):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    create_schedule_table()
 
     data = schedule_df.to_json(
         orient="records",
@@ -189,26 +307,30 @@ def save_schedule(schedule_df):
     )
 
     cursor.execute("""
-        INSERT OR REPLACE INTO saved_schedule
-        (id, schedule_data)
-        VALUES (1, ?)
-    """, (data,))
+        INSERT INTO user_schedules
+        (user_id, schedule_data)
+        VALUES (?, ?)
+        ON CONFLICT(user_id)
+        DO UPDATE SET schedule_data = excluded.schedule_data
+    """, (
+        user_id,
+        data
+    ))
 
     conn.commit()
     conn.close()
 
 
-def load_schedule():
+def load_schedule(user_id):
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    create_schedule_table()
-
     cursor.execute("""
         SELECT schedule_data
-        FROM saved_schedule
-        WHERE id = 1
-    """)
+        FROM user_schedules
+        WHERE user_id = ?
+    """, (user_id,))
 
     result = cursor.fetchone()
 
@@ -218,22 +340,32 @@ def load_schedule():
         return pd.DataFrame()
 
     try:
+
         data = json.loads(result[0])
 
         return pd.DataFrame(data)
 
     except Exception:
+
         return pd.DataFrame()
 
 
-def delete_schedule():
+def delete_schedule(user_id):
+
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        DELETE FROM saved_schedule
-        WHERE id = 1
-    """)
+        DELETE FROM user_schedules
+        WHERE user_id = ?
+    """, (user_id,))
 
     conn.commit()
     conn.close()
+
+
+# =========================================================
+# INITIALIZE DATABASE
+# =========================================================
+
+create_tables()

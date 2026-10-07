@@ -5,15 +5,17 @@ Member C: Interface / Output / Visualization Developer
 
 import streamlit as st
 import pandas as pd
+
 from datetime import date, timedelta
+
 import plotly.express as px
 
 from database import (
     create_tables,
-    create_subject_table,
-    create_schedule_table,
-    save_profile,
+    create_user,
+    login_user,
     load_profile,
+    save_profile,
     save_subject,
     load_subjects,
     delete_subject,
@@ -22,11 +24,6 @@ from database import (
     delete_schedule,
 )
 
-# Create database tables
-create_tables()
-create_subject_table()
-create_schedule_table()
-
 from engine import (
     generate_study_plan,
     panic_rebalance,
@@ -34,13 +31,23 @@ from engine import (
 )
 
 try:
+
     from engine import get_nasa_apod
+
 except Exception:
+
     get_nasa_apod = None
 
 
 # =========================================================
-# 1. PAGE CONFIGURATION
+# DATABASE
+# =========================================================
+
+create_tables()
+
+
+# =========================================================
+# PAGE CONFIGURATION
 # =========================================================
 
 st.set_page_config(
@@ -52,76 +59,108 @@ st.set_page_config(
 
 
 # =========================================================
-# 2. THEMES
+# THEMES
 # =========================================================
 
 THEMES = {
+
     "Midnight Cosmos (Dark)": {
+
         "bg": "linear-gradient(135deg, #0B0E14 0%, #161B26 100%)",
+
         "card_bg": "rgba(255,255,255,0.05)",
+
         "border": "rgba(255,255,255,0.12)",
+
         "text": "#E2E8F0",
+
         "accent": "#A855F7",
+
         "plotly": "plotly_dark",
     },
+
 
     "Espresso Library (Dark Academia)": {
+
         "bg": "linear-gradient(135deg, #1C1614 0%, #2A221E 100%)",
+
         "card_bg": "rgba(212,175,55,0.06)",
+
         "border": "rgba(212,175,55,0.18)",
+
         "text": "#F4EBD9",
+
         "accent": "#D4AF37",
+
         "plotly": "plotly_dark",
     },
 
+
     "Parchment & Ink (Light)": {
+
         "bg": "linear-gradient(135deg, #F5EBD7 0%, #FFF8EA 100%)",
+
         "card_bg": "rgba(255,255,255,0.72)",
+
         "border": "rgba(90,70,40,0.18)",
+
         "text": "#302A24",
+
         "accent": "#8B5E34",
+
         "plotly": "plotly_white",
     },
 
+
     "Nordic Aurora (Light)": {
+
         "bg": "linear-gradient(135deg, #EAF7F4 0%, #F7FBFF 100%)",
+
         "card_bg": "rgba(255,255,255,0.75)",
+
         "border": "rgba(40,90,90,0.16)",
+
         "text": "#183333",
+
         "accent": "#168A8A",
+
         "plotly": "plotly_white",
     },
 }
 
 
 # =========================================================
-# 3. SESSION STATE
+# SESSION STATE
 # =========================================================
 
-if "subjects" not in st.session_state:
+if "logged_in" not in st.session_state:
 
-    saved_subjects = load_subjects()
-
-    for subject in saved_subjects:
-
-        try:
-            subject["exam_date"] = date.fromisoformat(
-                subject["exam_date"]
-            )
-        except Exception:
-            pass
-
-    st.session_state.subjects = saved_subjects
+    st.session_state.logged_in = False
 
 
-if "schedule_df" not in st.session_state:
+if "user_id" not in st.session_state:
 
-    st.session_state.schedule_df = load_schedule()
+    st.session_state.user_id = None
+
+
+if "username" not in st.session_state:
+
+    st.session_state.username = ""
 
 
 if "student_name" not in st.session_state:
 
     st.session_state.student_name = ""
+
+
+if "subjects" not in st.session_state:
+
+    st.session_state.subjects = []
+
+
+if "schedule_df" not in st.session_state:
+
+    st.session_state.schedule_df = pd.DataFrame()
 
 
 if "edit_profile" not in st.session_state:
@@ -130,7 +169,272 @@ if "edit_profile" not in st.session_state:
 
 
 # =========================================================
-# 4. SIDEBAR
+# LOGIN / SIGN UP PAGE
+# =========================================================
+
+if not st.session_state.logged_in:
+
+    st.markdown(
+        """
+        <style>
+
+        .login-title {
+            font-size: 48px;
+            font-weight: 800;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            font-size: 18px;
+            opacity: 0.75;
+            margin-bottom: 30px;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="login-title">🌌 StudySync</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="login-subtitle">Your Personalized Smart Study Planner</div>',
+        unsafe_allow_html=True
+    )
+
+    tab1, tab2 = st.tabs([
+        "🔐 Login",
+        "📝 Create Account"
+    ])
+
+
+    # =====================================================
+    # LOGIN
+    # =====================================================
+
+    with tab1:
+
+        st.subheader("Welcome Back 👋")
+
+        login_username = st.text_input(
+            "Username",
+            key="login_username"
+        )
+
+        login_password = st.text_input(
+            "Password",
+            type="password",
+            key="login_password"
+        )
+
+        if st.button(
+            "🔐 Login",
+            type="primary",
+            use_container_width=True
+        ):
+
+            if not login_username or not login_password:
+
+                st.error(
+                    "Please enter username and password."
+                )
+
+            else:
+
+                user = login_user(
+                    login_username,
+                    login_password
+                )
+
+                if user:
+
+                    st.session_state.logged_in = True
+
+                    st.session_state.user_id = user[0]
+
+                    st.session_state.username = user[1]
+
+                    st.session_state.student_name = user[2]
+
+                    st.session_state.subjects = load_subjects(
+                        user[0]
+                    )
+
+                    for subject in st.session_state.subjects:
+
+                        try:
+
+                            subject["exam_date"] = date.fromisoformat(
+                                subject["exam_date"]
+                            )
+
+                        except Exception:
+
+                            pass
+
+
+                    st.session_state.schedule_df = load_schedule(
+                        user[0]
+                    )
+
+                    st.success(
+                        "✅ Login successful!"
+                    )
+
+                    st.rerun()
+
+                else:
+
+                    st.error(
+                        "❌ Invalid username or password."
+                    )
+
+
+    # =====================================================
+    # CREATE ACCOUNT
+    # =====================================================
+
+    with tab2:
+
+        st.subheader("Create Your StudySync Account 🚀")
+
+        new_name = st.text_input(
+            "Full Name",
+            key="new_name"
+        )
+
+        new_username = st.text_input(
+            "Create Username",
+            key="new_username"
+        )
+
+        new_email = st.text_input(
+            "Email",
+            key="new_email"
+        )
+
+        new_phone = st.text_input(
+            "Phone Number",
+            key="new_phone"
+        )
+
+        new_college = st.text_input(
+            "College",
+            key="new_college"
+        )
+
+        new_semester = st.text_input(
+            "Semester",
+            placeholder="Example: 3rd Semester",
+            key="new_semester"
+        )
+
+        new_password = st.text_input(
+            "Create Password",
+            type="password",
+            key="new_password"
+        )
+
+        confirm_password = st.text_input(
+            "Confirm Password",
+            type="password",
+            key="confirm_password"
+        )
+
+
+        if st.button(
+            "📝 Create Account",
+            type="primary",
+            use_container_width=True
+        ):
+
+            if not new_name.strip():
+
+                st.error("Please enter your name.")
+
+            elif not new_username.strip():
+
+                st.error("Please create a username.")
+
+            elif not new_password:
+
+                st.error("Please create a password.")
+
+            elif len(new_password) < 4:
+
+                st.error(
+                    "Password should contain at least 4 characters."
+                )
+
+            elif new_password != confirm_password:
+
+                st.error(
+                    "Passwords do not match."
+                )
+
+            else:
+
+                user_id = create_user(
+                    new_username,
+                    new_password,
+                    new_name,
+                    new_email,
+                    new_phone,
+                    new_college,
+                    new_semester
+                )
+
+                if user_id:
+
+                    st.success(
+                        "🎉 Account created successfully! Please login."
+                    )
+
+                else:
+
+                    st.error(
+                        "❌ Username already exists. Please choose another username."
+                    )
+
+
+    st.stop()
+
+
+# =========================================================
+# LOGOUT FUNCTION
+# =========================================================
+
+def logout():
+
+    st.session_state.logged_in = False
+
+    st.session_state.user_id = None
+
+    st.session_state.username = ""
+
+    st.session_state.student_name = ""
+
+    st.session_state.subjects = []
+
+    st.session_state.schedule_df = pd.DataFrame()
+
+    st.session_state.edit_profile = False
+
+
+# =========================================================
+# CURRENT USER
+# =========================================================
+
+user_id = st.session_state.user_id
+
+
+# =========================================================
+# 1. SIDEBAR
 # =========================================================
 
 with st.sidebar:
@@ -141,10 +445,14 @@ with st.sidebar:
         "Personalized Smart Study Planner"
     )
 
-    # Theme
+
+    # =====================================================
+    # THEME
+    # =====================================================
+
     theme_name = st.selectbox(
         "🎨 Choose Theme",
-        list(THEMES.keys()),
+        list(THEMES.keys())
     )
 
     theme = THEMES[theme_name]
@@ -158,88 +466,89 @@ with st.sidebar:
 
     st.subheader("👤 Student Profile")
 
-    saved_profile = load_profile()
+    saved_profile = load_profile(user_id)
 
-    # NORMAL PROFILE VIEW
+
     if (
         saved_profile
         and saved_profile[0]
         and not st.session_state.edit_profile
     ):
 
-        # Show ONLY name
         st.write(
             f"**Name:** {saved_profile[0]}"
         )
 
-        # Edit button
+        st.caption(
+            f"Username: @{st.session_state.username}"
+        )
+
         if st.button(
             "✏️ Edit Profile",
-            use_container_width=True,
+            use_container_width=True
         ):
 
             st.session_state.edit_profile = True
+
             st.rerun()
 
-        student_name = saved_profile[0]
 
-        st.session_state.student_name = student_name
-
-
-    # EDIT / FIRST TIME PROFILE
     else:
 
         if saved_profile:
 
             default_name = saved_profile[0] or ""
+
             default_email = saved_profile[1] or ""
+
             default_phone = saved_profile[2] or ""
+
             default_college = saved_profile[3] or ""
+
             default_semester = saved_profile[4] or ""
 
         else:
 
             default_name = ""
+
             default_email = ""
+
             default_phone = ""
+
             default_college = ""
+
             default_semester = ""
 
 
         student_name = st.text_input(
             "Student Name",
-            value=default_name,
-            placeholder="Enter your name",
+            value=default_name
         )
 
         email = st.text_input(
             "📧 Email",
-            value=default_email,
-            placeholder="example@email.com",
+            value=default_email
         )
 
         phone = st.text_input(
             "📱 Phone Number",
-            value=default_phone,
-            placeholder="Enter phone number",
+            value=default_phone
         )
 
         college = st.text_input(
             "🏫 College",
-            value=default_college,
-            placeholder="Enter your college",
+            value=default_college
         )
 
         semester = st.text_input(
             "🎓 Semester",
-            value=default_semester,
-            placeholder="Example: 3rd Semester",
+            value=default_semester
         )
 
 
         if st.button(
             "💾 Save Profile",
-            use_container_width=True,
+            use_container_width=True
         ):
 
             if not student_name.strip():
@@ -251,24 +560,40 @@ with st.sidebar:
             else:
 
                 save_profile(
+                    user_id,
                     student_name,
                     email,
                     phone,
                     college,
-                    semester,
+                    semester
                 )
 
-                st.session_state.student_name = (
-                    student_name
-                )
+                st.session_state.student_name = student_name
 
                 st.session_state.edit_profile = False
 
                 st.success(
-                    "✅ Profile saved successfully!"
+                    "✅ Profile saved!"
                 )
 
                 st.rerun()
+
+
+    st.divider()
+
+
+    # =====================================================
+    # LOGOUT
+    # =====================================================
+
+    if st.button(
+        "🚪 Logout",
+        use_container_width=True
+    ):
+
+        logout()
+
+        st.rerun()
 
 
     st.divider()
@@ -287,17 +612,17 @@ with st.sidebar:
         min_value=1.0,
         max_value=12.0,
         value=5.0,
-        step=0.5,
+        step=0.5
     )
 
     start_date = st.date_input(
         "Start Date",
-        value=date.today(),
+        value=date.today()
     )
 
     taper_eve = st.checkbox(
         "Exam-Eve Cognitive Taper (50% Load)",
-        value=True,
+        value=True
     )
 
 
@@ -312,7 +637,7 @@ with st.sidebar:
 
     audio_url = st.text_input(
         "Focus Audio URL",
-        placeholder="Paste audio/YouTube URL",
+        placeholder="Paste audio/YouTube URL"
     )
 
     if audio_url:
@@ -323,7 +648,7 @@ with st.sidebar:
 
 
 # =========================================================
-# 5. CUSTOM CSS
+# CUSTOM CSS
 # =========================================================
 
 st.markdown(
@@ -353,40 +678,34 @@ st.markdown(
 
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
 # =========================================================
-# 6. HEADER
+# HEADER
 # =========================================================
 
 st.markdown(
     '<div class="main-title">🌌 StudySync</div>',
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 st.markdown(
     '<div class="subtitle">Adaptive, Urgency-Weighted Smart Study Planner</div>',
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
-if student_name:
+if st.session_state.student_name:
 
     st.success(
-        f"Welcome, {student_name}! 👋 Enter your subjects below and generate your personalized timetable."
-    )
-
-else:
-
-    st.info(
-        "👋 Welcome! Enter your name and subjects to create your personalized timetable."
+        f"Welcome, {st.session_state.student_name}! 👋"
     )
 
 
 # =========================================================
-# 7. KPI SECTION
+# KPI SECTION
 # =========================================================
 
 subject_count = len(
@@ -394,6 +713,7 @@ subject_count = len(
 )
 
 total_hours = 0.0
+
 
 if not st.session_state.schedule_df.empty:
 
@@ -406,6 +726,7 @@ if not st.session_state.schedule_df.empty:
 
 exam_days = "—"
 
+
 if st.session_state.subjects:
 
     future_dates = []
@@ -417,12 +738,17 @@ if st.session_state.subjects:
         if isinstance(exam, str):
 
             try:
+
                 exam = date.fromisoformat(exam)
+
             except Exception:
+
                 continue
 
         if exam:
+
             future_dates.append(exam)
+
 
     if future_dates:
 
@@ -439,33 +765,41 @@ if st.session_state.subjects:
 
 k1, k2, k3, k4 = st.columns(4)
 
+
 with k1:
+
     st.metric(
         "📚 Subjects",
-        subject_count,
+        subject_count
     )
+
 
 with k2:
+
     st.metric(
         "⏱️ Revision Volume",
-        f"{total_hours:.1f} hrs",
+        f"{total_hours:.1f} hrs"
     )
+
 
 with k3:
+
     st.metric(
         "🎯 Nearest Exam",
-        exam_days,
+        exam_days
     )
 
+
 with k4:
+
     st.metric(
         "⚡ Daily Capacity",
-        f"{daily_hours:.1f} hrs/day",
+        f"{daily_hours:.1f} hrs/day"
     )
 
 
 # =========================================================
-# 8. BUILD STUDY PLAN
+# BUILD STUDY PLAN
 # =========================================================
 
 st.divider()
@@ -475,27 +809,28 @@ st.header(
 )
 
 st.write(
-    "Enter your subjects below. Every student can create a different timetable."
+    "Add your subjects and create your personalized timetable."
 )
 
 
 with st.expander(
     "➕ Add a Subject",
-    expanded=True,
+    expanded=True
 ):
 
     with st.form(
         "add_subject_form",
-        clear_on_submit=True,
+        clear_on_submit=True
     ):
 
         col1, col2 = st.columns(2)
+
 
         with col1:
 
             subject_name = st.text_input(
                 "Subject Name",
-                placeholder="Example: Data Structures",
+                placeholder="Example: Data Structures"
             )
 
             chapters = st.number_input(
@@ -503,8 +838,9 @@ with st.expander(
                 min_value=1,
                 max_value=100,
                 value=5,
-                step=1,
+                step=1
             )
+
 
         with col2:
 
@@ -512,20 +848,20 @@ with st.expander(
                 "Difficulty",
                 min_value=1,
                 max_value=5,
-                value=3,
-                help="1 = Easy, 5 = Very Difficult",
+                value=3
             )
 
             exam_date = st.date_input(
                 "Exam Date",
                 value=date.today() + timedelta(days=7),
-                min_value=date.today(),
+                min_value=date.today()
             )
+
 
         submitted = st.form_submit_button(
             "➕ Add Subject",
             type="primary",
-            use_container_width=True,
+            use_container_width=True
         )
 
 
@@ -546,24 +882,30 @@ with st.expander(
             else:
 
                 save_subject(
+                    user_id,
                     subject_name.strip(),
                     int(chapters),
                     int(difficulty),
-                    exam_date,
+                    exam_date
                 )
 
-                st.session_state.subjects = (
-                    load_subjects()
+                st.session_state.subjects = load_subjects(
+                    user_id
                 )
+
 
                 for subject in st.session_state.subjects:
 
                     try:
+
                         subject["exam_date"] = date.fromisoformat(
                             subject["exam_date"]
                         )
+
                     except Exception:
+
                         pass
+
 
                 st.success(
                     f"{subject_name} added successfully! ✅"
@@ -573,7 +915,7 @@ with st.expander(
 
 
 # =========================================================
-# 9. SUBJECT ROSTER
+# SUBJECT ROSTER
 # =========================================================
 
 st.subheader(
@@ -589,79 +931,79 @@ if not st.session_state.subjects:
 
 else:
 
-    for i, subject in enumerate(
-        st.session_state.subjects
-    ):
+    for subject in st.session_state.subjects:
 
         col1, col2, col3, col4, col5 = st.columns(
             [3, 1, 1, 2, 1]
         )
 
+
         with col1:
+
             st.write(
                 f"**{subject['name']}**"
             )
 
+
         with col2:
+
             st.write(
                 f"📖 {subject['chapters']} Ch"
             )
 
+
         with col3:
+
             st.write(
                 f"⭐ {subject['difficulty']}/5"
             )
 
+
         with col4:
+
             st.write(
                 f"📅 {subject['exam_date']}"
             )
+
 
         with col5:
 
             if st.button(
                 "🗑️",
-                key=f"delete_subject_{subject['id']}",
+                key=f"delete_subject_{subject['id']}"
             ):
 
                 delete_subject(
+                    user_id,
                     subject["id"]
                 )
 
-                st.session_state.subjects = (
-                    load_subjects()
+                st.session_state.subjects = load_subjects(
+                    user_id
                 )
 
-                for saved_subject in st.session_state.subjects:
+                st.session_state.schedule_df = pd.DataFrame()
 
-                    try:
-                        saved_subject["exam_date"] = date.fromisoformat(
-                            saved_subject["exam_date"]
-                        )
-                    except Exception:
-                        pass
-
-                st.session_state.schedule_df = (
-                    pd.DataFrame()
+                delete_schedule(
+                    user_id
                 )
-
-                delete_schedule()
 
                 st.rerun()
 
 
 # =========================================================
-# 10. GENERATE TIMETABLE
+# GENERATE TIMETABLE
 # =========================================================
 
 if st.session_state.subjects:
 
     st.divider()
 
+
     if st.button(
         "🚀 Generate My Personalized Study Timetable",
         type="primary",
-        use_container_width=True,
+        use_container_width=True
     ):
 
         try:
@@ -674,21 +1016,23 @@ if st.session_state.subjects:
                     st.session_state.subjects,
                     start_date,
                     daily_hours,
-                    taper_exam_eve=taper_eve,
+                    taper_exam_eve=taper_eve
                 )
 
                 st.session_state.schedule_df = schedule
 
-                # Save timetable permanently
                 save_schedule(
-                    st.session_state.schedule_df
+                    user_id,
+                    schedule
                 )
 
+
             st.success(
-                "🎉 Your personalized study timetable has been generated and saved!"
+                "🎉 Your personalized timetable has been generated!"
             )
 
             st.rerun()
+
 
         except Exception as e:
 
@@ -700,7 +1044,7 @@ if st.session_state.subjects:
 
 
 # =========================================================
-# 11. CURRENT TIMETABLE
+# CURRENT TIMETABLE
 # =========================================================
 
 if not st.session_state.schedule_df.empty:
@@ -714,12 +1058,12 @@ if not st.session_state.schedule_df.empty:
     st.dataframe(
         st.session_state.schedule_df,
         use_container_width=True,
-        hide_index=True,
+        hide_index=True
     )
 
 
 # =========================================================
-# 12. DYNAMIC CATCH-UP
+# DYNAMIC CATCH-UP
 # =========================================================
 
 if not st.session_state.schedule_df.empty:
@@ -734,24 +1078,28 @@ if not st.session_state.schedule_df.empty:
         "Missed your study target? Rebalance the remaining study hours."
     )
 
+
     col1, col2 = st.columns(2)
+
 
     with col1:
 
         slacked_date = st.date_input(
             "Which day did you miss?",
             value=date.today(),
-            key="slacked_date",
+            key="slacked_date"
         )
+
 
     with col2:
 
         st.write("")
         st.write("")
 
+
         if st.button(
             "⚠️ Slacked Off Today? Rebalance Plan",
-            use_container_width=True,
+            use_container_width=True
         ):
 
             current_df = (
@@ -760,34 +1108,39 @@ if not st.session_state.schedule_df.empty:
 
             old_hours = current_df["Hours"].sum()
 
+
             new_schedule = panic_rebalance(
                 current_df,
-                slacked_date.strftime(
-                    "%Y-%m-%d"
-                ),
+                slacked_date.strftime("%Y-%m-%d")
             )
+
 
             new_hours = new_schedule["Hours"].sum()
 
-            st.session_state.schedule_df = (
+
+            st.session_state.schedule_df = new_schedule
+
+
+            save_schedule(
+                user_id,
                 new_schedule
             )
 
-            save_schedule(
-                new_schedule
-            )
 
             st.success(
                 "✅ Schedule recalibrated and saved!"
             )
 
+
             st.info(
                 "📚 Missed study hours were redistributed across the remaining study sessions."
             )
 
+
             st.write(
                 f"**Previous total planned hours:** {old_hours:.1f} hrs"
             )
+
 
             st.write(
                 f"**Updated total planned hours:** {new_hours:.1f} hrs"
@@ -795,7 +1148,7 @@ if not st.session_state.schedule_df.empty:
 
 
 # =========================================================
-# 13. CALENDAR EXPORT
+# CALENDAR EXPORT
 # =========================================================
 
 if not st.session_state.schedule_df.empty:
@@ -806,19 +1159,22 @@ if not st.session_state.schedule_df.empty:
         "📅 Calendar Integration"
     )
 
+
     try:
 
         ics_content = generate_ics_calendar(
             st.session_state.schedule_df
         )
 
+
         st.download_button(
             label="📅 Export Study Plan to Calendar (.ics)",
             data=ics_content,
             file_name="my_study_plan.ics",
             mime="text/calendar",
-            use_container_width=True,
+            use_container_width=True
         )
+
 
     except Exception:
 
@@ -828,7 +1184,7 @@ if not st.session_state.schedule_df.empty:
 
 
 # =========================================================
-# 14. PLOTLY REVISION ROADMAP
+# PLOTLY REVISION ROADMAP
 # =========================================================
 
 if not st.session_state.schedule_df.empty:
@@ -839,13 +1195,16 @@ if not st.session_state.schedule_df.empty:
         "📊 Dynamic Revision Roadmap"
     )
 
+
     df = st.session_state.schedule_df.copy()
+
 
     if "Date" in df.columns:
 
         df["Date"] = pd.to_datetime(
             df["Date"]
         )
+
 
     fig = px.bar(
         df,
@@ -861,11 +1220,12 @@ if not st.session_state.schedule_df.empty:
                 "Subject",
                 "Hours",
                 "Exam Date",
-                "Days Left",
+                "Days Left"
             ]
             if c in df.columns
-        ],
+        ]
     )
+
 
     fig.update_layout(
         plot_bgcolor="rgba(0,0,0,0)",
@@ -875,18 +1235,19 @@ if not st.session_state.schedule_df.empty:
             yanchor="bottom",
             y=1.02,
             xanchor="right",
-            x=1,
-        ),
+            x=1
+        )
     )
+
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
+        use_container_width=True
     )
 
 
 # =========================================================
-# 15. INTERACTIVE CHECKLIST
+# INTERACTIVE CHECKLIST
 # =========================================================
 
 if not st.session_state.schedule_df.empty:
@@ -897,13 +1258,16 @@ if not st.session_state.schedule_df.empty:
         "✅ Interactive Revision Checklist"
     )
 
+
     checklist_df = (
         st.session_state.schedule_df.copy()
     )
 
+
     if "Status" not in checklist_df.columns:
 
         checklist_df["Status"] = "Pending"
+
 
     disabled_columns = [
         column
@@ -912,10 +1276,11 @@ if not st.session_state.schedule_df.empty:
             "Subject",
             "Hours",
             "Exam Date",
-            "Days Left",
+            "Days Left"
         ]
         if column in checklist_df.columns
     ]
+
 
     edited_df = st.data_editor(
         checklist_df,
@@ -925,30 +1290,33 @@ if not st.session_state.schedule_df.empty:
                 options=[
                     "Pending",
                     "Completed",
-                    "Skipped",
+                    "Skipped"
                 ],
-                required=True,
+                required=True
             )
         },
         disabled=disabled_columns,
         hide_index=True,
         use_container_width=True,
-        key="revision_checklist",
+        key="revision_checklist"
     )
+
 
     st.session_state.schedule_df = edited_df
 
-    # Save checklist changes
+
     save_schedule(
-        st.session_state.schedule_df
+        user_id,
+        edited_df
     )
 
 
 # =========================================================
-# 16. COSMIC FOCUS
+# COSMIC FOCUS
 # =========================================================
 
 st.divider()
+
 
 with st.expander(
     "🌌 Cosmic Focus & Motivation"
@@ -957,6 +1325,7 @@ with st.expander(
     st.write(
         "Take a short break, stay focused and keep studying! 🚀"
     )
+
 
     if get_nasa_apod is not None:
 
@@ -968,14 +1337,16 @@ with st.expander(
 
                 apod = get_nasa_apod()
 
+
                 if apod:
 
                     if apod.get("url"):
 
                         st.image(
                             apod["url"],
-                            use_container_width=True,
+                            use_container_width=True
                         )
+
 
                     if apod.get("title"):
 
@@ -983,17 +1354,20 @@ with st.expander(
                             apod["title"]
                         )
 
+
                     if apod.get("explanation"):
 
                         st.write(
                             apod["explanation"]
                         )
 
+
         except Exception:
 
             st.info(
-                "NASA picture is temporarily unavailable. The study planner still works normally."
+                "NASA picture is temporarily unavailable."
             )
+
 
     st.info(
         "💡 Focus tip: Study for 25–50 minutes, then take a short break."
@@ -1001,7 +1375,7 @@ with st.expander(
 
 
 # =========================================================
-# 17. EMPTY STATE
+# EMPTY STATE
 # =========================================================
 
 if (
@@ -1011,39 +1385,36 @@ if (
 
     st.divider()
 
+
     st.markdown(
         """
         ### 🚀 How StudySync Works
 
-        **1️⃣ Enter your subjects**  
-        Add every subject you want to study.
+        **1️⃣ Create your account / Login**
 
-        **2️⃣ Enter exam dates**  
-        The planner uses exam urgency.
+        **2️⃣ Add your subjects**
 
-        **3️⃣ Set difficulty and chapters**  
-        Difficult subjects receive appropriate priority.
+        **3️⃣ Enter exam dates**
 
-        **4️⃣ Set your daily study hours**  
-        The timetable stays within your available time.
+        **4️⃣ Set difficulty and chapters**
 
-        **5️⃣ Generate your timetable**  
-        StudySync creates your personalized revision plan.
+        **5️⃣ Set your daily study hours**
 
-        **6️⃣ Track your progress**  
-        Mark tasks as Completed, Pending or Skipped.
+        **6️⃣ Generate your personalized timetable**
 
-        **7️⃣ Export to your calendar**  
-        Download the complete plan as an `.ics` file.
+        **7️⃣ Track your progress**
+
+        **8️⃣ Export your plan to your calendar**
         """
     )
 
 
 # =========================================================
-# 18. FOOTER
+# FOOTER
 # =========================================================
 
 st.divider()
+
 
 st.caption(
     "🌌 StudySync | Adaptive Smart Study Planner | Member C UI & Visualization"
